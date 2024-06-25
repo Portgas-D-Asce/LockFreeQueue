@@ -76,7 +76,7 @@ int main() {
         pts.emplace_back(producer, n);
     }
 
-    int m2 = 4;
+    int m2 = 1;
     vector<thread> cts;
     for(int i = 0; i < m2; ++i) {
         cts.emplace_back(consumer, n * m1 / m2);
