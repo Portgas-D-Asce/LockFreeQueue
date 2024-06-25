@@ -11,19 +11,18 @@ using namespace std;
 template<typename T>
 class SSQueue {
 private:
-    T* _buff;
-    size_t _n;
+    T* const _buff;
+    const size_t _n;
     // size_t _start, _end;
     // volatile size_t _start, _end;
-    atomic<size_t> _start, _end;
+    size_t _start;
+    // atomic<size_t> _start;
+    atomic<size_t> _end;
 public:
-    explicit SSQueue(size_t n) : _n(n), _start(0), _end(0) {
-        _buff = new T[_n];
-    }
+    explicit SSQueue(size_t n) : _buff(new T[n]), _n(n), _start(0), _end(0) {}
 
     ~SSQueue() {
         delete []_buff;
-        _buff = nullptr;
     }
 
     bool empty() {
@@ -38,7 +37,8 @@ public:
         // 保证了一旦通过索引发现队列不为空，新数据一定是可取的
         _buff[_end & _n - 1] = val;
         // barrier();
-        _end++;
+        ++_end;
+        // _end.fetch_add(1, memory_order_release);
         return true;
     }
 
@@ -51,14 +51,14 @@ public:
     }
 };
 
-SSQueue<int> ssq(65536);
+SSQueue<int> ssq(16384);
 vector<int> nums;
-int N = 1 << 20;
+int N = 1 << 24;
 void producer() {
     for(int i = 0; i < N; ++i) {
         while(!ssq.push(i));
         // 让生产者跑慢点，便于消费者追上，恶意制造竞争
-        usleep(2);
+        // usleep(2);
     }
 }
 
@@ -67,7 +67,7 @@ void consumer() {
     while(idx < N) {
         ++cnt;
         if(ssq.empty()) continue;
-        cout << ssq.front() << endl;
+        // cout << ssq.front() << endl;
         nums.push_back(ssq.front());
         ssq.pop();
         ++idx;
