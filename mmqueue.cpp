@@ -86,7 +86,7 @@ public:
 
 int main() {
     MMQueue<int> mmq(65536);
-    int n = 1 << 20;
+    int n = 1 << 24;
     static vector<int> st(n);
 
     auto producer = [&mmq](int total) {
