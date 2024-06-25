@@ -37,6 +37,7 @@ public:
 
         // 你这个位置数据是准备好了，允许别人读了，但是前面位置呢，可能还没有准备好，不能跨过它来读你
         // 相当于前面的人加了一把锁，锁没到达，当前位置是无法访问的，即使数据已经准备好了
+        // 缺陷一：当生产者过多时，会导致新能快速下降
         while(_center != pos) this_thread::yield();
 
         // 前面所有位置数据都准备好了，而且我早都准备好了，就差将位置标记为可读了，现在终于可以标记了
@@ -73,6 +74,7 @@ public:
         size_t pos = _start;
         do {
             if(pos == _center) return false;
+            // 缺陷二：当消息比较大时，频繁拷贝会降低效率
             val = _buff[pos & _n - 1];
         } while (!_start.compare_exchange_strong(pos, pos + 1));
 
