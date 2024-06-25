@@ -70,16 +70,15 @@ int main() {
         std::cout << "Round: " << cnt << std::endl;
     };
 
-    int m1 = 4;
+    int m1 = 1, m2 = 4;
     vector<thread> pts;
     for(int i = 0; i < m1; ++i) {
-        pts.emplace_back(producer, n);
+        pts.emplace_back(producer, n * m2);
     }
 
-    int m2 = 1;
     vector<thread> cts;
     for(int i = 0; i < m2; ++i) {
-        cts.emplace_back(consumer, n * m1 / m2);
+        cts.emplace_back(consumer, n);
     }
 
     for(int i = 0; i < m1; ++i) {
