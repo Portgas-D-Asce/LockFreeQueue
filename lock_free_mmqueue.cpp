@@ -46,13 +46,17 @@ static atomic<size_t> alive;
 template<typename T>
 class Producer {
 private:
+    // 一个生产者拥有 n (消费者数量) 个队列
     vector<shared_ptr<SSQueue<T>>> _ssqs;
     thread _t;
 private:
+    // 向多个消息队列中总共发送 total 个消息
     void routing(size_t total) {
         size_t idx = 0, cnt = 0, n = _ssqs.size(), round = 0;
         while(cnt < total) {
             ++round;
+            // 整体轮流策略，先第 0 个队列，再第 1 个队列......
+            // 发送失败（队列满了），不会在同一个队列上停留
             if(!_ssqs[++idx % n]->push(cnt)) continue;
             ++cnt;
         }
@@ -71,7 +75,7 @@ public:
     }
 };
 
-#define CHECK
+// #define CHECK
 
 #ifdef CHECK
 mutex mtx;
@@ -86,14 +90,17 @@ atomic<size_t> consume_total = 0;
 template<typename T>
 class Consumer {
 private:
+    // 一个消费者拥有 m (生产者数量) 个队列
     vector<shared_ptr<SSQueue<T>>> _ssqs;
     thread _t;
 private:
     void routing() {
-        size_t cnt = 0, round = 0, n = _ssqs.size();
-        size_t idx = 0, temp = 0;
+        size_t cnt = 0, round = 0, n = _ssqs.size(), idx = 0, temp = 0;
+        // 直到 “没有生产者存在” 且 “所有队列都没有消息了” 则停止接收
+        // 不保证接收完所有数据
         while(alive || temp <= 2 * n) {
             ++round, ++temp;
+            // 当接收失败（队列为空）时，不会在某个队列上停留
             if(_ssqs[++idx % n]->empty()) continue;
 
 #ifdef CHECK
@@ -126,13 +133,17 @@ int main() {
     nums = vector<int>(w / m);
 #endif
 
+    // 创建 m * n 个队列
     vector<shared_ptr<SSQueue<int>>> ssqs(m * n);
     for(int i = 0; i < m * n; ++i) {
         ssqs[i] = make_shared<SSQueue<int>>(16384);
     }
 
+    // 创建 m 个生产者
     vector<shared_ptr<Producer<int>>> ps(m);
     for(int i = 0; i < m; ++i) {
+        // 第 0 个生产者拥有第 0、1、2、3 号队列
+        // 第 1 个生产者拥有第 4、5、6、7 号队列
         vector<shared_ptr<SSQueue<int>>> temp(n);
         for(int j = 0; j < n; ++j) {
             temp[j] = ssqs[i * n + j];
@@ -142,6 +153,8 @@ int main() {
 
     vector<shared_ptr<Consumer<int>>> cs(n);
     for(int i = 0; i < n; ++i) {
+        // 第 0 个消费者拥有第 0、4、8、12 号队列
+        // 第 1 个消费者拥有第 1、5、9、13 号队列
         vector<shared_ptr<SSQueue<int>>> temp(m);
         for(int j = 0; j < m; ++j) {
             temp[j] = ssqs[j * n + i];
