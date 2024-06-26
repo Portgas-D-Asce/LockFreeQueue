@@ -1,46 +1,5 @@
-#include <iostream>
-#include <vector>
-#include <thread>
-#include <algorithm>
-#include <atomic>
-#include <vector>
-using namespace std;
+#include "lock_free_ssqueue.h"
 
-template<typename T>
-class SSQueue {
-private:
-    T* const _buff;
-    const size_t _n;
-    size_t _start;
-    atomic<size_t> _end;
-public:
-    explicit SSQueue(size_t n) : _buff(new T[n]), _n(n), _start(0), _end(0) {}
-
-    SSQueue(const SSQueue& other) : _buff(new T[other._n]), _n(other._n), _start(0), _end(0) {}
-
-    ~SSQueue() {
-        delete []_buff;
-    }
-
-    bool empty() const {
-        return _start == _end;
-    }
-
-    bool push(const T& val) {
-        if(_end - _start == _n) return false;
-        _buff[_end & _n - 1] = val;
-        ++_end;
-        return true;
-    }
-
-    void pop() {
-        ++_start;
-    }
-
-    T& front() {
-        return _buff[_start & _n - 1];
-    }
-};
 
 static atomic<size_t> alive;
 template<typename T>
@@ -57,7 +16,7 @@ private:
             ++round;
             // 整体轮流策略，先第 0 个队列，再第 1 个队列......
             // 发送失败（队列满了），不会在同一个队列上停留
-            if(!_ssqs[++idx % n]->push(cnt)) continue;
+            if(!_ssqs[++idx & n - 1]->push(cnt)) continue;
             ++cnt;
         }
         --alive;
@@ -98,15 +57,16 @@ private:
         size_t cnt = 0, round = 0, n = _ssqs.size(), idx = 0, temp = 0;
         // 直到 “没有生产者存在” 且 “所有队列都没有消息了” 则停止接收
         // 不保证接收完所有数据
-        while(alive || temp <= 2 * n) {
-            ++round, ++temp;
+        while(alive || temp <= n) {
+            ++round;
+            ++temp;
             // 当接收失败（队列为空）时，不会在某个队列上停留
-            if(_ssqs[++idx % n]->empty()) continue;
+            if(_ssqs[++idx & n - 1]->empty()) continue;
 
 #ifdef CHECK
             rem(_ssqs[idx % n]->front());
 #endif
-            _ssqs[idx % n]->pop();
+            _ssqs[idx & n - 1]->pop();
             ++cnt, temp = 0;
         }
         consume_total += cnt;
@@ -126,7 +86,7 @@ public:
 
 
 int main() {
-    size_t m = 4, n = 4, w = 1 << 26;
+    size_t m = 4, n = 4, w = 1 << 28;
     printf("%ld producers will send %ld messages totally\n", m, w);
     alive = m;
 #ifdef CHECK
@@ -136,7 +96,7 @@ int main() {
     // 创建 m * n 个队列
     vector<shared_ptr<SSQueue<int>>> ssqs(m * n);
     for(int i = 0; i < m * n; ++i) {
-        ssqs[i] = make_shared<SSQueue<int>>(16384);
+        ssqs[i] = make_shared<SSQueue<int>>(16384 << 8);
     }
 
     // 创建 m 个生产者
